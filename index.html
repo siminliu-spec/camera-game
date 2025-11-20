@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cozy Dino Camera</title>
+    <title>Dino Cam Canvas</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;800&family=VT323&family=Permanent+Marker&display=swap" rel="stylesheet">
+    <!-- 引入 html2canvas 用于截图下载 -->
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <style>
         :root {
             --bg-color: #f4f4f4;
@@ -19,10 +21,13 @@
         body {
             margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden;
             background-color: var(--bg-color);
+            /* 画布背景：点阵风格 */
             background-image: radial-gradient(var(--dot-color) 2px, transparent 2px);
             background-size: 24px 24px;
             font-family: 'Inter', sans-serif;
-            user-select: none; touch-action: none;
+            user-select: none; 
+            overscroll-behavior: none;
+            touch-action: none;
         }
 
         #flash-layer {
@@ -31,136 +36,115 @@
             transition: opacity 0.05s ease-out;
         }
 
-        #wall { width: 100%; height: 100%; position: relative; z-index: 1; }
-
-        /* === 静音按钮 === */
-        .sound-toggle {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            width: 40px;
-            height: 40px;
-            background: white;
-            border: 2px solid #333;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            cursor: pointer;
-            z-index: 10000;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            transition: transform 0.1s;
+        /* === 留言墙/画布 === */
+        #wall { 
+            width: 100%; height: 100%; position: relative; z-index: 1; 
+            background-color: var(--bg-color); /* 确保截图时有背景色 */
+            background-image: radial-gradient(var(--dot-color) 2px, transparent 2px);
+            background-size: 24px 24px;
         }
-        .sound-toggle:active { transform: scale(0.9); }
 
+        /* === 顶部按钮组 === */
+        .top-buttons {
+            position: fixed; top: 20px; right: 20px;
+            display: flex; gap: 15px; z-index: 10000;
+        }
+
+        .icon-btn {
+            width: 44px; height: 44px;
+            background: white; border: 2px solid #333; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; cursor: pointer;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+            transition: transform 0.1s, box-shadow 0.1s;
+            touch-action: manipulation;
+        }
+        .icon-btn:active { 
+            transform: translateY(4px); 
+            box-shadow: 0 0 0 rgba(0,0,0,0.2);
+        }
+
+        /* === 底部控制区 === */
         .control-stage {
             position: absolute; bottom: 0; left: 0; width: 100%; height: 300px;
             display: flex; justify-content: center; align-items: flex-end;
             padding-bottom: 20px; pointer-events: none; z-index: 5000;
+            transform-origin: bottom center;
+            transition: transform 0.3s;
         }
 
         .camera-rig { pointer-events: auto; position: relative; }
 
+        /* === 相机造型 === */
         .kodak-camera {
             width: 400px; height: 220px;
-            background: var(--k-yellow);
-            border-radius: 45px;
-            position: relative;
+            background: var(--k-yellow); border-radius: 45px; position: relative;
             box-shadow: 0 25px 50px rgba(0,0,0,0.4), inset 0 -5px 10px rgba(0,0,0,0.2);
             overflow: hidden;
         }
-
         .black-grip {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: var(--k-black);
             clip-path: path('M 0 0 L 140 0 C 140 0, 170 10, 170 60 C 170 130, 110 130, 110 180 C 110 220, 280 220, 300 220 L 0 220 Z');
             z-index: 1;
         }
-
         .red-zone {
             position: absolute; bottom: 0; right: 0; width: 220px; height: 140px;
-            background: var(--k-red);
-            z-index: 1;
+            background: var(--k-red); z-index: 1;
             clip-path: path('M 0 140 L 220 140 L 220 0 C 220 0, 180 80, 80 80 C 20 80, 0 140, 0 140 Z');
         }
-
         .flash-housing {
-            position: absolute; top: 15px; right: 15px;
-            width: 130px; height: 90px;
-            background: var(--k-black);
-            border-radius: 30px 30px 40px 40px;
-            z-index: 2;
-            box-shadow: 2px 5px 10px rgba(0,0,0,0.3);
-            display: flex; align-items: center; justify-content: center;
+            position: absolute; top: 15px; right: 15px; width: 130px; height: 90px;
+            background: var(--k-black); border-radius: 30px 30px 40px 40px; z-index: 2;
+            box-shadow: 2px 5px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;
         }
-
         .flash-lamp {
-            width: 80px; height: 36px;
-            background: #e8e8e8;
-            border-radius: 4px; border: 2px solid #666;
+            width: 80px; height: 36px; background: #e8e8e8; border-radius: 4px; border: 2px solid #666;
             background-image: repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(0,0,0,0.1) 5px);
             box-shadow: inset 0 0 10px rgba(255,255,255,0.8);
         }
-
         .lens-complex {
             position: absolute; top: 55%; left: 38%; transform: translate(-50%, -50%);
             width: 110px; height: 110px; z-index: 3;
         }
-        
         .lens-body {
-            width: 100%; height: 100%; background: #111; border-radius: 50%;
-            border: 1px solid #333;
+            width: 100%; height: 100%; background: #111; border-radius: 50%; border: 1px solid #333;
             box-shadow: 5px 10px 20px rgba(0,0,0,0.5), inset 0 2px 5px rgba(255,255,255,0.2);
             display: flex; align-items: center; justify-content: center;
         }
-
         .lens-glass {
-            width: 50px; height: 50px;
-            background: radial-gradient(circle at 30% 30%, #2c3e50 0%, #000 70%);
-            border-radius: 50%; position: relative;
-            box-shadow: inset 0 0 10px #000; border: 4px solid #000;
+            width: 50px; height: 50px; background: radial-gradient(circle at 30% 30%, #2c3e50 0%, #000 70%);
+            border-radius: 50%; position: relative; box-shadow: inset 0 0 10px #000; border: 4px solid #000;
         }
         .lens-glass::after {
-            content: ''; position: absolute; top: 10px; right: 12px;
-            width: 12px; height: 8px; background: rgba(255,255,255,0.4);
-            border-radius: 50%; transform: rotate(-45deg);
+            content: ''; position: absolute; top: 10px; right: 12px; width: 12px; height: 8px;
+            background: rgba(255,255,255,0.4); border-radius: 50%; transform: rotate(-45deg);
         }
-
         .viewfinder-wrapper {
             position: absolute; top: 25px; left: 180px; z-index: 5;
             display: flex; flex-direction: column; align-items: center;
         }
-
         #scene-input {
-            width: 80px; height: 55px;
-            background: linear-gradient(135deg, #1a1a1a 0%, #000 100%);
-            border: 4px solid #333; border-radius: 8px;
-            color: #00ff00; font-family: 'VT323', monospace; font-size: 14px;
-            text-align: center; outline: none;
-            box-shadow: inset 0 0 10px #000; padding: 4px;
-            transition: width 0.2s, box-shadow 0.2s;
+            width: 80px; height: 55px; background: linear-gradient(135deg, #1a1a1a 0%, #000 100%);
+            border: 4px solid #333; border-radius: 8px; color: #00ff00;
+            font-family: 'VT323', monospace; font-size: 16px; text-align: center; outline: none;
+            box-shadow: inset 0 0 10px #000; padding: 4px; transition: width 0.2s, box-shadow 0.2s;
         }
         #scene-input:focus {
-            width: 160px; border-color: #666;
-            box-shadow: 0 0 15px rgba(0,255,0,0.2); transform: translateX(20px);
+            width: 160px; border-color: #666; box-shadow: 0 0 15px rgba(0,255,0,0.2); transform: translateX(20px);
         }
         #scene-input::placeholder { color: #555; font-size: 10px; line-height: 1.1; }
-
         .brand-logo {
             position: absolute; top: 25px; left: 25px; color: var(--k-red);
             font-family: 'Inter', sans-serif; font-weight: 800; font-size: 28px; letter-spacing: -1px;
             z-index: 5; text-shadow: 0 1px 0 rgba(255,255,255,0.4);
         }
-
         .lightning-icon {
-            position: absolute; bottom: 40px; right: 55px;
-            width: 36px; height: 36px; background: #ffc600; border-radius: 50%;
-            z-index: 4; display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            position: absolute; bottom: 40px; right: 55px; width: 36px; height: 36px;
+            background: #ffc600; border-radius: 50%; z-index: 4;
+            display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
         .bolt { color: var(--k-red); font-size: 24px; font-weight: bold; transform: skewX(-10deg); }
-
         .shutter-btn {
             position: absolute; top: -8px; right: 70px; width: 70px; height: 25px;
             background: #ccc; border-radius: 10px 10px 0 0; z-index: -1; cursor: pointer;
@@ -168,41 +152,42 @@
             box-shadow: inset 0 -2px 5px rgba(0,0,0,0.2); transition: transform 0.1s;
         }
         .shutter-btn:active { transform: translateY(5px); }
-
         .printer-slot {
             position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%);
             width: 300px; height: 10px; background: #111; z-index: -2; border-radius: 0 0 10px 10px;
         }
 
+        /* === 照片卡片 === */
         .photo-card {
             position: absolute; width: 240px; background: #fff; padding: 10px 10px 45px 10px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.15); cursor: grab; touch-action: none;
             border-radius: 2px; will-change: transform, left, top;
+            transition: transform 0.2s, opacity 0.3s;
         }
         .photo-card.dragging {
             cursor: grabbing; z-index: 9999 !important;
             box-shadow: 0 25px 50px rgba(0,0,0,0.3); transform: scale(1.05) !important;
+            transition: none;
+        }
+        .photo-card.trashed {
+            opacity: 0; transform: scale(0.5) rotate(45deg) !important; pointer-events: none;
         }
         .photo-frame {
             width: 100%; height: 160px; background: #0a0a0a; 
             overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center;
         }
-        
         .photo-img {
             width: 100%; height: 100%; object-fit: cover; opacity: 0;
-            transition: opacity 0.1s ease-out; 
-            filter: contrast(1.05) saturate(1.1);
-            z-index: 2; position: relative;
+            transition: opacity 0.1s ease-out; filter: contrast(1.05) saturate(1.1); z-index: 2; position: relative;
         }
-
+        
+        /* 跑酷小恐龙 */
         .dino-runner {
             position: absolute; bottom: 20px; left: -50px; width: 40px; height: 40px; z-index: 1;
             animation: run-across 1.8s linear infinite;
         }
-
         .pixel-dino {
             width: 4px; height: 4px; background: transparent;
-            /* 物理重力感跳跃 */
             animation: real-gravity-jump 0.5s infinite alternate cubic-bezier(0.2, 0.6, 0.3, 1);
             box-shadow: 
                 16px 0 #00ff00, 20px 0 #00ff00, 24px 0 #00ff00, 28px 0 #00ff00, 32px 0 #00ff00,
@@ -217,9 +202,7 @@
                 8px 36px #00ff00, 20px 36px #00ff00,
                 4px 40px #00ff00, 8px 40px #00ff00, 20px 40px #00ff00, 24px 40px #00ff00;
         }
-
         @keyframes run-across { 0% { left: -60px; } 100% { left: 100%; } }
-
         @keyframes real-gravity-jump {
             0% { transform: translateY(10px) scale(1.2, 0.8); }
             10% { transform: translateY(-10px) scale(0.9, 1.1); }
@@ -230,8 +213,7 @@
         .date-stamp {
             position: absolute; bottom: 8px; right: 10px;
             font-family: 'VT323', monospace; color: #ff9400; 
-            font-size: 1.2rem; text-shadow: 0 0 4px rgba(255, 100, 0, 0.6); pointer-events: none;
-            z-index: 3;
+            font-size: 1.2rem; text-shadow: 0 0 4px rgba(255, 100, 0, 0.6); pointer-events: none; z-index: 3;
         }
         .photo-caption {
             position: absolute; bottom: 12px; left: 15px;
@@ -240,14 +222,28 @@
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
 
+        /* === Media Queries === */
+        @media (max-width: 600px) {
+            .control-stage { transform: scale(0.8); bottom: -20px; }
+            .photo-card { transform: scale(0.9); }
+        }
+        @media (max-width: 380px) {
+            .control-stage { transform: scale(0.7); bottom: -40px; }
+        }
+
     </style>
 </head>
 <body>
     <div id="flash-layer"></div>
+    
+    <!-- 画布/留言墙 -->
     <div id="wall"></div>
 
-    <!-- 静音按钮 -->
-    <div class="sound-toggle" id="mute-btn" onclick="toggleSound()">🔊</div>
+    <!-- 按钮组 -->
+    <div class="top-buttons">
+        <div class="icon-btn" id="save-btn" onclick="downloadCanvas()" title="Save Canvas">💾</div>
+        <div class="icon-btn" id="mute-btn" onclick="toggleSound()" title="Mute">🔊</div>
+    </div>
 
     <div class="control-stage">
         <div class="camera-rig">
@@ -274,78 +270,54 @@
         const muteBtn = document.getElementById('mute-btn');
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         
-        // 静音状态
         let isMuted = false;
-
         function toggleSound() {
             isMuted = !isMuted;
             muteBtn.innerHTML = isMuted ? '🔇' : '🔊';
         }
 
-        // 1. 打字音效：舒适的低频 Thock 声
+        // === 1. 低频打字音效 ===
         function playTypeSound() {
-            if (isMuted) return; // 静音检查
+            if (isMuted) return;
             if (audioCtx.state === 'suspended') audioCtx.resume();
             const t = audioCtx.currentTime;
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
-
-            // 关键改变：使用 sine 波，频率低，听起来像软木塞或机械键盘
-            osc.type = 'sine'; 
-            // 200-250Hz 低音
-            osc.frequency.setValueAtTime(200 + Math.random() * 50, t); 
-            
-            // 音量稍微大一点点因为频率低，但包络要短
-            gain.gain.setValueAtTime(0.2, t);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08); 
-
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start(t);
-            osc.stop(t + 0.08);
+            osc.type = 'sine'; osc.frequency.setValueAtTime(200 + Math.random() * 50, t); 
+            gain.gain.setValueAtTime(0.2, t); gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08); 
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(t); osc.stop(t + 0.08);
         }
 
-        // 2. Loading 音乐
+        // === 2. Loading 音乐 (Donki) ===
         let loadingInterval = null;
         let melodyIndex = 0;
-
         function startLoadingSound() {
             if (loadingInterval) return;
             melodyIndex = 0;
             const notes = [523.25, 659.25, 783.99, 659.25]; 
-            
             const playNextNote = () => {
-                if (isMuted) return; // 如果静音，只跑逻辑不发声
+                if (isMuted) return;
                 if (audioCtx.state === 'suspended') audioCtx.resume();
                 const t = audioCtx.currentTime;
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
-
                 osc.type = 'triangle';
                 const freq = notes[melodyIndex % notes.length];
                 melodyIndex++;
-
                 osc.frequency.setValueAtTime(freq, t);
-                gain.gain.setValueAtTime(0.04, t); 
-                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
-
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start(t);
-                osc.stop(t + 0.15);
+                gain.gain.setValueAtTime(0.04, t); gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(t); osc.stop(t + 0.15);
             };
             playNextNote();
             loadingInterval = setInterval(playNextNote, 150);
         }
-
         function stopLoadingSound() {
-            if (loadingInterval) {
-                clearInterval(loadingInterval);
-                loadingInterval = null;
-            }
+            if (loadingInterval) { clearInterval(loadingInterval); loadingInterval = null; }
         }
 
-        // 3. 成功音效
+        // === 3. 成功音效 ===
         function playSuccessSound() {
             if (isMuted) return;
             if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -354,19 +326,16 @@
             notes.forEach((freq, i) => {
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
-                osc.type = 'triangle'; 
-                osc.frequency.setValueAtTime(freq, t + i * 0.12);
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(freq, t + i * 0.12);
                 gain.gain.setValueAtTime(0, t + i * 0.12);
                 gain.gain.linearRampToValueAtTime(0.15, t + i * 0.12 + 0.02);
                 gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.12 + 0.6);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start(t + i * 0.12);
-                osc.stop(t + i * 0.12 + 0.7);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(t + i * 0.12); osc.stop(t + i * 0.12 + 0.7);
             });
         }
 
-        // 4. 机械快门
+        // === 4. 快门声 ===
         function playShutter() {
             if (isMuted) return;
             if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -391,6 +360,66 @@
             noise.start(t);
         }
 
+        // === 5. 丢弃/揉纸音效 ===
+        function playTrashSound() {
+            if (isMuted) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const t = audioCtx.currentTime;
+            const bufferSize = audioCtx.sampleRate * 0.3;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i/bufferSize, 2);
+            }
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(1000, t);
+            filter.frequency.linearRampToValueAtTime(100, t + 0.2);
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0.5, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
+            noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+            noise.start(t);
+        }
+
+        // === 6. 保存/下载音效 (清脆的电子音) ===
+        function playSaveSound() {
+            if (isMuted) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const t = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1500, t);
+            osc.frequency.exponentialRampToValueAtTime(600, t + 0.1);
+            
+            gain.gain.setValueAtTime(0.2, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+            
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(t); osc.stop(t + 0.2);
+        }
+
+        // === 下载功能 ===
+        function downloadCanvas() {
+            playSaveSound();
+            // 使用 html2canvas 截取 #wall 区域
+            // useCORS: true 对外部图片非常重要
+            html2canvas(document.querySelector("#wall"), {
+                useCORS: true, 
+                backgroundColor: null, // 保持背景
+                scale: 2 // 高清
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `my-dino-wall-${Date.now()}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+            });
+        }
+
         input.addEventListener('input', playTypeSound);
 
         function takePhoto() {
@@ -400,11 +429,9 @@
                 setTimeout(() => input.style.borderColor = '#333', 300);
                 return;
             }
-
             playShutter();
             flashLayer.style.opacity = 0.9;
             setTimeout(() => flashLayer.style.opacity = 0, 100);
-
             generatePhoto(text);
             input.value = '';
             input.blur();
@@ -412,22 +439,18 @@
 
         function generatePhoto(promptText) {
             startLoadingSound();
-
             const card = document.createElement('div');
             card.classList.add('photo-card');
-            
             const now = new Date();
             const dateStr = `'${now.getFullYear().toString().substr(2)} ${ (now.getMonth()+1).toString().padStart(2,'0') } ${ now.getDate().toString().padStart(2,'0') }`;
             const enhancedPrompt = `${promptText}, photorealistic, sharp focus, high detailed, 4k, shot on film, kodak portra colors, bright lighting`;
-            
             const imgUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?width=480&height=360&model=turbo&nologo=true&seed=${Math.random()}`;
 
             card.innerHTML = `
                 <div class="photo-frame">
-                    <div class="dino-runner">
-                        <div class="pixel-dino"></div>
-                    </div>
-                    <img class="photo-img" src="${imgUrl}" alt="Photo">
+                    <div class="dino-runner"><div class="pixel-dino"></div></div>
+                    <!-- crossorigin="anonymous" 对于 html2canvas 很重要 -->
+                    <img class="photo-img" src="${imgUrl}" alt="Photo" crossorigin="anonymous">
                     <div class="date-stamp">${dateStr}</div>
                 </div>
                 <div class="photo-caption">${escapeHtml(promptText)}</div>
@@ -445,13 +468,11 @@
 
             const startX = window.innerWidth / 2 - 120;
             const startY = window.innerHeight - 280;
-
             card.style.left = startX + 'px';
             card.style.top = startY + 'px';
             card.style.transform = 'scale(0.5) rotate(0deg)';
             card.style.opacity = 0;
             card.style.zIndex = 10;
-
             wall.appendChild(card);
 
             const targetX = Math.random() * (window.innerWidth - 260) + 10;
@@ -465,7 +486,6 @@
                 card.style.top = targetY + 'px';
                 card.style.transform = `scale(1) rotate(${rotate}deg)`;
             });
-
             enableDrag(card);
         }
 
@@ -478,12 +498,10 @@
                 isDragging = true;
                 el.setPointerCapture(e.pointerId);
                 el.classList.add('dragging');
-                
                 startX = e.clientX;
                 startY = e.clientY;
                 initialLeft = parseFloat(el.style.left || 0);
                 initialTop = parseFloat(el.style.top || 0);
-                
                 el.style.zIndex = 99999;
             };
 
@@ -501,10 +519,23 @@
                 isDragging = false;
                 el.releasePointerCapture(e.pointerId);
                 el.classList.remove('dragging');
-                el.style.transition = 'transform 0.2s';
-                const rot = Math.random() * 6 - 3;
-                el.style.transform = `scale(1) rotate(${rot}deg)`;
-                el.style.zIndex = 100 + document.querySelectorAll('.photo-card').length;
+
+                // === 丢弃检测逻辑 ===
+                const rect = el.getBoundingClientRect();
+                const screenW = window.innerWidth;
+                const screenH = window.innerHeight;
+                
+                // 如果拖出屏幕左、右、上边缘
+                if (rect.right < 20 || rect.left > screenW - 20 || rect.bottom < 20) {
+                    playTrashSound();
+                    el.classList.add('trashed');
+                    setTimeout(() => el.remove(), 300);
+                } else {
+                    el.style.transition = 'transform 0.2s';
+                    const rot = Math.random() * 6 - 3;
+                    el.style.transform = `scale(1) rotate(${rot}deg)`;
+                    el.style.zIndex = 100 + document.querySelectorAll('.photo-card').length;
+                }
             };
         }
 
